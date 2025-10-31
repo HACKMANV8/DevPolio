@@ -271,8 +271,7 @@ else if (stage == 1) {  // local disks
             if (is_loop) {
                 cmd = "sudo bash ./wipe-device.sh " + d.node + " " + method + " > /tmp/sentinel-wipe.log 2>&1";
             } else {
-                cmd = "sudo FORCE_REAL=1 bash ./wipe-device.sh " + d.node + " " + method + " > /tmp/sentinel-wipe.log 2>&1";
-            }
+cmd = "sudo FORCE_REAL=1 bash /opt/sentinel/scripts/wipe-device.sh " + d.node + " " + method + " > /tmp/sentinel-wipe.log 2>&1";            }
 
             werase(mainwin);
             box(mainwin, 0, 0);
@@ -359,7 +358,7 @@ else if (stage == 1) {  // local disks
             wrefresh(mainwin);
 
             // detect device using detect-android.sh
-            std::string detect_cmd = "bash ./detect-android.sh " + mode + " > /tmp/sentinel-detect.log 2>&1";
+            std::string detect_cmd = "bash /opt/sentinel/scripts/detect-android.sh " + mode + " > /tmp/sentinel-detect.log 2>&1";
             int detect_rc = system(detect_cmd.c_str());
             (void)detect_rc;  // silence warning
 
@@ -408,7 +407,7 @@ else if (stage == 1) {  // local disks
             mvwprintw(mainwin, 4, 2, "Logs are being generated...");
             wrefresh(mainwin);
 
-            std::string wipe_cmd = "bash ./android-wipe.sh " + mode + " " + serial + " > /tmp/sentinel-android.log 2>&1";
+            std::string wipe_cmd = "bash /opt/sentinel/scripts/android-wipe.sh " + mode + " " + serial + " > /tmp/sentinel-android.log 2>&1";
             int rc = system(wipe_cmd.c_str());
 
             // post-wipe message
