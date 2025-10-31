@@ -327,111 +327,83 @@ cmd = "sudo FORCE_REAL=1 bash /opt/sentinel/scripts/wipe-device.sh " + d.node + 
 }
 
 
-        else if (stage == 2) {  // Android device wipe
-    std::string mode = "fastboot";
-    int idx = 0;
-
-    while (true) {
-        werase(mainwin);
-        box(mainwin, 0, 0);
-        wattron(mainwin, COLOR_PAIR(3));
-        mvwprintw(mainwin, 1, 2, "=== Android Wipe Utility ===");
-        wattroff(mainwin, COLOR_PAIR(3));
-        mvwprintw(mainwin, 3, 4, "[1] Detect via fastboot");
-        mvwprintw(mainwin, 4, 4, "[2] Detect via adb");
-        mvwprintw(mainwin, 6, 4, "r = rescan, b = back, q = quit");
-        mvwprintw(mainwin, 8, 4, "Current mode: %s", mode.c_str());
-        wrefresh(mainwin);
-
-        int ch = wgetch(mainwin);
-        if (ch == '1') mode = "fastboot";
-        else if (ch == '2') mode = "adb";
-        else if (ch == 'b' || ch == 'B') { stage = 0; break; }
-        else if (ch == 'q' || ch == 'Q') { endwin(); return 0; }
-
-        else if (ch == 'r' || ch == 'R' || ch == 10 || ch == KEY_ENTER) {
-            werase(mainwin);
-            box(mainwin, 0, 0);
-            wattron(mainwin, COLOR_PAIR(3));
-            mvwprintw(mainwin, 2, 2, "Detecting Android devices (%s)...", mode.c_str());
-            wattroff(mainwin, COLOR_PAIR(3));
-            wrefresh(mainwin);
-
-            // detect device using detect-android.sh
-            std::string detect_cmd = "bash /opt/sentinel/scripts/detect-android.sh " + mode + " > /tmp/sentinel-detect.log 2>&1";
-            int detect_rc = system(detect_cmd.c_str());
-            (void)detect_rc;  // silence warning
-
-            // read first serial from detect output
-            std::ifstream log("/tmp/sentinel-detect.log");
-            std::string serial, line;
-            if (log.is_open()) {
-                while (std::getline(log, line)) {
-                    if (line.find("Found") != std::string::npos) {
-                        auto pos = line.find_last_of(' ');
-                        if (pos != std::string::npos) serial = line.substr(pos + 1);
-                        break;
-                    }
-                }
-                log.close();
-            }
-
-            werase(mainwin);
-            box(mainwin, 0, 0);
-            if (!serial.empty()) {
-                wattron(mainwin, COLOR_PAIR(2));
-                mvwprintw(mainwin, 2, 2, "Detected device: %s", serial.c_str());
-                wattroff(mainwin, COLOR_PAIR(2));
-                mvwprintw(mainwin, 4, 2, "Press ENTER to wipe, or b to cancel.");
-            } else {
-                wattron(mainwin, COLOR_PAIR(1));
-                mvwprintw(mainwin, 2, 2, "No %s device detected.", mode.c_str());
-                wattroff(mainwin, COLOR_PAIR(1));
-                mvwprintw(mainwin, 4, 2, "Press any key to retry or b to go back.");
+     else if (stage == 2) {  // Android device wipe
+            while (true) {
+                werase(mainwin);
+                box(mainwin, 0, 0);
+                wattron(mainwin, COLOR_PAIR(3));
+                mvwprintw(mainwin, 1, 2, "=== Android Wipe Utility ===");
+                wattroff(mainwin, COLOR_PAIR(3));
+                mvwprintw(mainwin, 3, 4, "This will wipe any connected Android device.");
+                mvwprintw(mainwin, 4, 4, "Device must have 'USB Debugging' enabled.");
+                
+                mvwprintw(mainwin, 7, 4, "Press ENTER to begin detection.");
+                mvwprintw(mainwin, 8, 4, "Press 'b' to go back or 'q' to quit.");
                 wrefresh(mainwin);
-                wgetch(mainwin);
-                continue;
+
+                int ch = wgetch(mainwin);
+                if (ch == 'b' || ch == 'B') { stage = 0; break; }
+                else if (ch == 'q' || ch == 'Q') { endwin(); return 0; }
+                else if (ch == 10 || ch == KEY_ENTER) {
+                    
+                    werase(mainwin);
+                    box(mainwin, 0, 0);
+                    wattron(mainwin, COLOR_PAIR(3));
+                    mvwprintw(mainwin, 2, 2, "Starting Android wipe...");
+                    wattroff(mainwin, COLOR_PAIR(3));
+                    mvwprintw(mainwin, 4, 2, "The script will now detect and ask for confirmation.");
+                    mvwprintw(mainwin, 5, 2, "Please follow its prompts...");
+                    mvwprintw(mainwin, 7, 2, "Logs: /tmp/sentinel-android.log");
+                    wrefresh(mainwin);
+
+                    // Call the single, merged script
+                    std::string wipe_cmd = "bash /opt/sentinel/scripts/android-wipe.sh > /tmp/sentinel-android.log 2>&1";
+                    int rc = system(wipe_cmd.c_str());
+
+                    // Read the log file to display results
+                    std::string log_contents;
+                    std::ifstream log_file("/tmp/sentinel-android.log");
+                    if (log_file) {
+                        std::stringstream ss;
+                        ss << log_file.rdbuf();
+                        log_contents = ss.str();
+                        log_file.close();
+                    }
+
+                    // Post-wipe message
+                    werase(mainwin);
+                    box(mainwin, 0, 0);
+                    if (rc == 0) {
+                        wattron(mainwin, COLOR_PAIR(2));
+                        mvwprintw(mainwin, 2, 2, "Android wipe process finished successfully (rc=0).");
+                    } else if (rc == 256) { // 256 is exit code 1 (no device)
+                        wattron(mainwin, COLOR_PAIR(1));
+                        mvwprintw(mainwin, 2, 2, "Wipe failed: No authorized ADB device found.");
+                    } else if (rc == 512) { // 512 is exit code 2 (canceled)
+                        wattron(mainwin, COLOR_PAIR(3));
+                        mvwprintw(mainwin, 2, 2, "Wipe canceled by user (rc=%d).", rc);
+                    } else {
+                        wattron(mainwin, COLOR_PAIR(1));
+                        mvwprintw(mainwin, 2, 2, "Wipe process failed (rc=%d).", rc);
+                    }
+                    wattroff(mainwin, COLOR_PAIR(1));
+                    wattroff(mainwin, COLOR_PAIR(2));
+                    wattroff(mainwin, COLOR_PAIR(3));
+
+                    mvwprintw(mainwin, 4, 2, "--- Log (/tmp/sentinel-android.log) ---");
+                    int row = 5;
+                    std::istringstream iss(log_contents);
+                    std::string line;
+                    while (std::getline(iss, line) && row < getmaxy(mainwin) - 2) {
+                        mvwprintw(mainwin, row++, 2, "%.*s", w - 4, line.c_str());
+                    }
+                    // ---
+                    mvwprintw(mainwin, getmaxy(mainwin) - 2, 2, "Press any key to return.");
+                    wrefresh(mainwin);
+                    wgetch(mainwin);
+                }
             }
-            wrefresh(mainwin);
-
-            int k = wgetch(mainwin);
-            if (k == 'b' || k == 'B') continue;
-            if (k != 10 && k != KEY_ENTER) continue;
-
-            // run android-wipe.sh
-            werase(mainwin);
-            box(mainwin, 0, 0);
-            wattron(mainwin, COLOR_PAIR(3));
-            mvwprintw(mainwin, 2, 2, "Running android wipe (%s) on device: %s", mode.c_str(), serial.c_str());
-            wattroff(mainwin, COLOR_PAIR(3));
-            mvwprintw(mainwin, 4, 2, "Logs are being generated...");
-            wrefresh(mainwin);
-
-            std::string wipe_cmd = "bash /opt/sentinel/scripts/android-wipe.sh " + mode + " " + serial + " > /tmp/sentinel-android.log 2>&1";
-            int rc = system(wipe_cmd.c_str());
-
-            // post-wipe message
-            werase(mainwin);
-            box(mainwin, 0, 0);
-            if (rc == 0)
-                wattron(mainwin, COLOR_PAIR(2));
-            else
-                wattron(mainwin, COLOR_PAIR(1));
-
-            mvwprintw(mainwin, 3, 2, "Android wipe finished with status: %d", rc);
-            mvwprintw(mainwin, 5, 2, "Attestation generated via attest.sh");
-            mvwprintw(mainwin, 7, 2, "Log: /tmp/sentinel-android.log");
-
-            wattroff(mainwin, COLOR_PAIR(1));
-            wattroff(mainwin, COLOR_PAIR(2));
-
-            mvwprintw(mainwin, 9, 2, "Press any key to return.");
-            wrefresh(mainwin);
-            wgetch(mainwin);
-        }
-    }
-}
-    }
+        }    }
     endwin();
     return 0;
 }

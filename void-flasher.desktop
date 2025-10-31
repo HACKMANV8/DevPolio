@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Void Flasher
+Comment=Flash the Void ISO to a USB drive
+Exec=/usr/bin/void-flasher
+Icon=void-flasher
+Type=Application
+Categories=Utility;System;
+Terminal=true

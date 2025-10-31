@@ -19,31 +19,39 @@ if [ ! -f "${SCRIPT_SOURCE_DIR}/main.cpp" ]; then
 fi
 WORK_DIR="${SCRIPT_SOURCE_DIR}/build_temp"
 
-TINYCORE_ISO="TinyCorePure64-15.0.iso"
-TINYCORE_URL="http://distro.ibiblio.org/tinycorelinux/15.x/x86_64/release/${TINYCORE_ISO}"
-TCZ_REPO="http://distro.ibiblio.org/tinycorelinux/15.x/x86_64/tcz"
+TINYCORE_ISO="TinyCorePure64-16.2.iso"
+TINYCORE_URL="http://distro.ibiblio.org/tinycorelinux/16.x/x86_64/release/${TINYCORE_ISO}"
+TCZ_REPO="http://www.tinycorelinux.net/16.x/x86_64/tcz/"
 
 TCZ_DEPS=(
-  "util-linux.tcz"
-  "parted.tcz" 
-  "gdisk.tcz"
-  "coreutils.tcz"
-  "hdparm.tcz"
-  "smartmontools.tcz"
-  # "nvme-cli.tcz"
-  # "android-tools.tcz"
+  "adb.tcz"
+  "fastboot.tcz"
   "bash.tcz"
+  "coreutils.tcz"
+  "gdisk.tcz"
+  "hdparm.tcz"
+  # "nvme-cli.tcz"
+  "parted.tcz"
+  "smartmontools.tcz"
+  "util-linux.tcz"
+
+  # --- Dependencies for v16 (64-bit) ---
+  #"libata.tcz"
   # "libblkid.tcz"
-  # "libuuid.tcz"
-  "ncursesw.tcz"
-  "readline.tcz"
-  "lzo.tcz"
-  "pcre.tcz"
-  # "libata.tcz"
+  # "libcrypto-3.tcz"
+  # "libgcc.tcz"
+  # "libnvme.tcz"
+  # "libssl-3.tcz"
+  # "libstdc++.tcz"
+  "libtirpc.tcz"
   "libusb.tcz"
-  # "libcrypto-1.1.1.tcz"
-  # "libssl-1.1.1.tcz"
-  "libzstd.tcz"
+  # "libuuid.tcz"
+  "lzo.tcz"
+  # "ncurses.tcz"
+  "ncursesw.tcz"
+  "pcre.tcz"
+  "readline.tcz"
+  # "zlib.tcz"
 )
 
 echo "==== Sentinel ISO Builder ===="
@@ -157,7 +165,7 @@ if [ ! -f "/tmp/${TINYCORE_ISO}" ]; then
     exit 1
   fi
   SIZE=$(stat -c%s "/tmp/${TINYCORE_ISO}")
-  if [ "$SIZE" -lt 100000000 ]; then
+  if [ "$SIZE" -lt 10000000 ]; then
     echo "ERROR: Downloaded file too small (size: $SIZE bytes)"
     rm -f "/tmp/${TINYCORE_ISO}"
     exit 1
@@ -220,7 +228,6 @@ mkdir -p opt/sentinel/{bin,scripts}
 cp "${WORK_DIR}/sentinel-gui" opt/sentinel/bin/
 chmod 755 opt/sentinel/bin/sentinel-gui
 
-# Verify the binary was copied correctly
 if ! file opt/sentinel/bin/sentinel-gui | grep -q "ELF.*executable"; then
   echo "ERROR: Binary corrupted during copy to rootfs"
   file opt/sentinel/bin/sentinel-gui
@@ -231,7 +238,6 @@ echo "[*] Installing scripts..."
 cp "${SCRIPT_SOURCE_DIR}/scripts/"*.sh opt/sentinel/scripts/
 chmod +x opt/sentinel/scripts/*
 
-# --- Install TCZ Dependencies ---
 echo "[*] Installing TCZ dependencies..."
 mkdir -p "${WORK_DIR}/extract/tcz_temp"
 pushd "${WORK_DIR}/extract/tcz_temp" > /dev/null

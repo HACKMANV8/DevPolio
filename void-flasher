@@ -1,0 +1,216 @@
+#!/bin/bash
+set -x  # Enable debug mode to see every command
+
+# --- [FIX] Check for root and re-launch with sudo if needed ---
+if [ "$EUID" -ne 0 ]; then
+  echo "Requesting root privileges..."
+  exec sudo -E "$0" "$@"
+fi
+# --- End Fix ---
+
+echo "=== Void Flasher Debug Log ==="
+echo "User: $(whoami)"
+echo "Display: $DISPLAY"
+echo "XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+echo "=================================="
+
+# --- Configuration ---
+ISO_URL="https://drive.google.com/uc?export=download&id=1tjpmqRFmL5yHBPS9IxegDvbm3RQBDBXs"
+ISO_FILENAME=void-live-20251101-002213.iso
+# --- End Configuration ---
+
+# Cleanup function
+cleanup() {
+  echo "[DEBUG] Cleaning up..."
+  rm -f "$ISO_FILENAME"
+}
+trap cleanup EXIT
+
+# We are now running as root, so we can proceed.
+
+# 2. Check for dependencies
+echo "[DEBUG] Checking dependencies..."
+for tool in wget zenity lsblk dd udisksctl; do
+  if ! command -v $tool &>/dev/null; then
+    echo "[ERROR] Required tool '$tool' is not installed."
+    zenity --error --text="Required tool '$tool' is not installed.\nPlease install it to continue." --title="Void Flasher - Error" 2>/dev/null || true
+    exit 1
+  else
+    echo "[DEBUG] Found: $tool"
+  fi
+done
+
+# 3. Select the USB Drive
+echo "[DEBUG] Scanning for USB drives..."
+disks_raw=($(lsblk -d -n -o NAME,SIZE,RM,TYPE | awk '$3=="1" && $4=="disk" {print "/dev/"$1, $2}'))
+echo "[DEBUG] Found ${#disks_raw[@]} items: ${disks_raw[@]}"
+
+if [ ${#disks_raw[@]} -eq 0 ]; then
+  echo "[ERROR] No USB drives were found."
+  zenity --error --text="No USB drives were found.\n\nPlease insert a USB drive and try again." 2>/dev/null || true
+  exit 1
+fi
+
+# Format the list for Zenity's radio buttons
+disks_list=()
+for ((i=0; i<${#disks_raw[@]}; i+=2)); do
+  disks_list+=(FALSE "${disks_raw[i]}" "(${disks_raw[i+1]})")
+  echo "[DEBUG] Adding to list: ${disks_raw[i]} (${disks_raw[i+1]})"
+done
+
+echo "[DEBUG] Showing device selection dialog..."
+# CRITICAL FIX: Redirect stderr to /dev/null to avoid capturing GTK warnings
+DEVICE=$(zenity --list \
+  --title="Select USB Drive" \
+  --text="Select the USB drive you want to flash:\n<b>WARNING: ALL DATA ON IT WILL BE DESTROYED.</b>" \
+  --radiolist \
+  --column="" \
+  --column="Device" \
+  --column="Size" \
+  "${disks_list[@]}" \
+  --width=400 --height=300 2>/dev/null)
+
+echo "[DEBUG] Selected device: '$DEVICE'"
+
+if [ -z "$DEVICE" ]; then
+  echo "[INFO] User canceled device selection."
+  zenity --info --text="Flash canceled." 2>/dev/null || true
+  exit 0
+fi
+
+# 4. Final Confirmation
+echo "[DEBUG] Showing confirmation dialog for $DEVICE..."
+zenity --question \
+  --title="FINAL WARNING" \
+  --text="Are you absolutely sure you want to <b>ERASE ALL DATA</b> on:\n\n<b>$DEVICE</b>\n\nThis action is irreversible.\n\nThe Void ISO will be downloaded and flashed." \
+  --width=400 2>/dev/null
+
+CONFIRM_STATUS=$?
+echo "[DEBUG] Confirmation dialog exit status: $CONFIRM_STATUS"
+
+if [ $CONFIRM_STATUS -ne 0 ]; then
+  echo "[INFO] User canceled at confirmation."
+  zenity --info --text="Flash canceled." 2>/dev/null || true
+  exit 0
+fi
+
+# 5. Download and Flash with progress bar
+echo "[DEBUG] Starting download and flash process..."
+
+(
+  echo "0"
+  echo "# Downloading Void ISO..."
+  
+  echo "[DOWNLOAD] Starting wget..." >&2
+  
+  # Download the ISO with progress
+  if wget -O "$ISO_FILENAME" "$ISO_URL" 2>&1 | tee /tmp/wget-log.txt | \
+    stdbuf -o0 awk '/[.]* [0-9]+%/{print substr($0, match($0, /[0-9]+%/), RLENGTH-1)}' | \
+    while read -r PERCENT; do
+      echo "[DOWNLOAD] Progress: $PERCENT%" >&2
+      echo $((PERCENT * 30 / 100))
+    done; then
+    echo "[DOWNLOAD] wget completed successfully" >&2
+  else
+    echo "[ERROR] Download failed!" >&2
+    exit 1
+  fi
+
+  if [ ! -f "$ISO_FILENAME" ]; then
+    echo "[ERROR] ISO file not created at $ISO_FILENAME" >&2
+    exit 1
+  fi
+  
+  ISO_SIZE=$(stat -c%s "$ISO_FILENAME" 2>/dev/null)
+  echo "[DOWNLOAD] ISO downloaded successfully. Size: $ISO_SIZE bytes" >&2
+
+  echo "30"
+  echo "# Unmounting all partitions on $DEVICE..."
+  
+  # Unmount all partitions
+  echo "[UNMOUNT] Looking for partitions on $DEVICE..." >&2
+  for partition in "${DEVICE}"?*; do
+    if [ -e "$partition" ]; then
+      echo "[UNMOUNT] Unmounting $partition..." >&2
+      udisksctl unmount --block-device "$partition" --force 2>&1 | tee -a /tmp/void-flasher-full.log >&2 || true
+    fi
+  done
+  sleep 1
+
+  echo "40"
+  echo "# Flashing ISO to $DEVICE..."
+  
+  # Get ISO size for progress calculation
+  TOTAL_SIZE=$(stat -c%s "$ISO_FILENAME" 2>/dev/null || echo "1")
+  echo "[FLASH] Starting dd... ISO size: $TOTAL_SIZE bytes" >&2
+  
+  # Flash the ISO with progress
+  if dd if="$ISO_FILENAME" of="$DEVICE" bs=4M status=progress oflag=direct 2>&1 | tee /tmp/dd-log.txt | \
+    stdbuf -o0 tr '\r' '\n' | awk '/bytes/ {print $1}' | \
+    while read -r BYTES; do
+      # Remove any non-numeric characters
+      BYTES_CLEAN=$(echo "$BYTES" | tr -dc '0-9')
+      if [ -n "$BYTES_CLEAN" ] && [ "$BYTES_CLEAN" -gt 0 ] && [ "$TOTAL_SIZE" -gt 0 ]; then
+        PERCENT=$((BYTES_CLEAN * 100 / TOTAL_SIZE))
+        PROGRESS=$((40 + PERCENT * 50 / 100))
+        echo "[FLASH] Bytes written: $BYTES_CLEAN / $TOTAL_SIZE ($PERCENT%) -> Progress: $PROGRESS%" >&2
+        echo $PROGRESS
+      fi
+    done; then
+    echo "[FLASH] dd completed successfully" >&2
+  else
+    echo "[ERROR] Flash failed!" >&2
+    exit 1
+  fi
+
+  echo "90"
+  echo "# Syncing filesystem... (This may take a minute)"
+  echo "[SYNC] Running sync..." >&2
+  sync
+  echo "[SYNC] Sync complete." >&2
+
+  echo "95"
+  echo "# Ejecting drive..."
+  echo "[EJECT] Powering off $DEVICE..." >&2
+  udisksctl power-off --block-device "$DEVICE" 2>&1 | tee -a /tmp/void-flasher-full.log >&2 || true
+  
+  echo "100"
+  echo "# Flash Complete!"
+  
+  echo "[SUCCESS] Flash process completed successfully!" >&2
+  sleep 1
+
+) 2>&1 | tee /tmp/void-flasher-full.log | zenity --progress \
+    --title="Void Flasher" \
+    --text="Starting..." \
+    --percentage=0 \
+    --auto-close \
+    --no-cancel \
+    --width=450 2>/dev/null || true
+
+FLASH_STATUS=${PIPESTATUS[0]}
+echo "[DEBUG] Flash process exit status: $FLASH_STATUS"
+
+# Check if the operation was successful
+if [ $FLASH_STATUS -ne 0 ]; then
+  echo "[ERROR] Flash failed with exit status: $FLASH_STATUS"
+  echo "[DEBUG] Full log contents:"
+  cat /tmp/void-flasher-full.log 2>/dev/null || echo "No log file found"
+  zenity --error --title="Flash Failed" --text="The flashing process failed.\n\nISO download may have failed or the USB drive was disconnected.\n\nCheck terminal for details." 2>/dev/null || true
+  exit 1
+fi
+
+# Success!
+echo "[SUCCESS] Flash completed successfully!"
+zenity --info --text="Flash complete!\n\n$DEVICE is now ready to boot." 2>/dev/null || true
+
+# --- Keep terminal open ---
+echo ""
+echo "==================================="
+echo "Flash complete! You can now close this terminal."
+echo "Logs saved to:"
+echo "  - /tmp/void-flasher-full.log"
+echo "  - /tmp/wget-log.txt"
+echo "  - /tmp/dd-log.txt"
+echo "==================================="
+read -p "Press Enter to exit..."

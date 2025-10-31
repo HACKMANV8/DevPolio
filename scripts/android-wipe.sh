@@ -1,48 +1,61 @@
 #!/usr/bin/env bash
 set -euo pipefail
-MODE="${1:-fastboot}"  # fastboot or adb
-DEV="${2:-}"
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-LOG="/tmp/sentinel-android-$(date +%s).log"
-echo "[*] android-wipe -> mode:$MODE dev:$DEV" | tee "$LOG"
+# This script handles detection, confirmation, and wiping.
+# It assumes the device is in ADB mode and will reboot it to fastboot.
 
-if [ "$MODE" = "fastboot" ]; then
-  echo "[*] Looking for fastboot devices" | tee -a "$LOG"
-  fastboot devices 2>&1 | tee -a "$LOG" || true
-  if [ -n "$DEV" ]; then
-    echo "[*] Erasing userdata on $DEV" | tee -a "$LOG"
-    fastboot -s "$DEV" erase userdata 2>&1 | tee -a "$LOG" || fastboot -s "$DEV" format userdata 2>&1 | tee -a "$LOG"
-    SERIAL="$DEV"
-  else
-    SERIAL="$(fastboot devices 2>/dev/null | awk 'NR==1{print $1}' || true)"
-    if [ -z "$SERIAL" ]; then
-      echo "[!] No fastboot device found." | tee -a "$LOG"
-      exit 1
-    fi
-    fastboot -s "$SERIAL" erase userdata 2>&1 | tee -a "$LOG" || fastboot -s "$SERIAL" format userdata 2>&1 | tee -a "$LOG"
-  fi
-elif [ "$MODE" = "adb" ]; then
-  echo "[*] Attempting adb-based wipe (requires device with adb & permissions)" | tee -a "$LOG"
-  
-  echo "[*] Explicitly starting adb server daemon..." | tee -a "$LOG"
-  adb start-server 2>&1 | tee -a "$LOG"
-  sleep 1 
-  
-  echo "[*] Listing adb devices..." | tee -a "$LOG"
-  adb devices 2>&1 | tee -a "$LOG"
-  SERIAL="$(adb devices 2>/dev/null | awk 'NR==2{print $1}' || true)"
-  if [ -z "$SERIAL" ]; then
-    echo "[!] No adb device found." | tee -a "$LOG"
-    exit 1
-  fi
-  echo "[*] Rebooting into recovery" | tee -a "$LOG"
-  adb -s "$SERIAL" reboot recovery 2>&1 | tee -a "$LOG" || true
-else
-  echo "usage: $0 fastboot|adb [device]" | tee -a "$LOG"
+LOG="/tmp/sentinel-android.log"
+echo "[*] android-wipe -> starting..." > "$LOG"
+
+SERIAL=""
+
+echo "[*] Looking for adb devices..." | tee -a "$LOG"
+
+# --- Start adb server and wait ---
+echo "[*] Explicitly starting adb server daemon..." | tee -a "$LOG"
+adb start-server 2>&1 | tee -a "$LOG"
+sleep 1 # Give the server a second to find devices
+
+adb devices 2>&1 | tee -a "$LOG"
+SERIAL="$(adb devices 2>/dev/null | grep -v 'unauthorized' | awk 'NR==2{print $1}' || true)"
+if [ -z "$SERIAL" ]; then
+  echo "[!] No authorized adb device found." | tee -a "$LOG"
+  echo "[!] Please check for an 'Allow USB debugging' prompt on your device." | tee -a "$LOG"
   exit 1
 fi
+echo "[*] Found adb device: $SERIAL" | tee -a "$LOG"
 
+# --- Confirmation Step ---
+echo "========================================"
+echo "  Found device: $SERIAL"
+echo "  Wipe will reboot to fastboot and erase."
+echo "========================================"
+echo -n "Type 'yes' to confirm and wipe: "
+
+# Read directly from the terminal
+read -r CONFIRM < /dev/tty
+
+if [ "$CONFIRM" != "yes" ]; then
+  echo "[!] Canceled by user." | tee -a "$LOG"
+  exit 2 # Exit with code 2 for "canceled"
+fi
+
+# --- Wipe Step ---
+echo "[*] WIPE CONFIRMED. Proceeding..." | tee -a "$LOG"
+
+echo "[*] Rebooting $SERIAL into bootloader (fastboot)..." | tee -a "$LOG"
+adb -s "$SERIAL" reboot bootloader 2>&1 | tee -a "$LOG" || true
+
+echo "[*] Waiting for device to appear in fastboot..." | tee -a "$LOG"
+sleep 15 
+
+echo "[*] Device detected. Wiping all data with 'fastboot -w'..." | tee -a "$LOG"
+fastboot -w 2>&1 | tee -a "$LOG"
+
+# --- Attestation Step ---
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-bash "$SCRIPT_DIR/attest.sh" "/dev/unknown-${SERIAL}" "android-${MODE}" "$LOG" || echo "[!] android attestation failed" | tee -a "$LOG"
+bash "$SCRIPT_DIR/attest.sh" "/dev/unknown-${SERIAL}" "android-wipe" "$LOG" || echo "[!] android attestation failed" | tee -a "$LOG"
 
+echo "[*] Wipe process finished." | tee -a "$LOG"
 exit 0
