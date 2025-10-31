@@ -19,8 +19,8 @@ if [ ! -f "${SCRIPT_SOURCE_DIR}/main.cpp" ]; then
 fi
 WORK_DIR="${SCRIPT_SOURCE_DIR}/build_temp"
 
-TINYCORE_ISO="CorePlus-15.0.iso"
-TINYCORE_URL="http://distro.ibiblio.org/tinycorelinux/15.x/x86/release/${TINYCORE_ISO}"
+TINYCORE_ISO="TinyCorePure64-15.0.iso"
+TINYCORE_URL="http://distro.ibiblio.org/tinycorelinux/15.x/x86_64/release/${TINYCORE_ISO}"
 
 echo "Hope for best my Nigga"
 
@@ -100,7 +100,7 @@ if [ ! -f "/tmp/${TINYCORE_ISO}" ]; then
     exit 1
   fi
   SIZE=$(stat -c%s "/tmp/${TINYCORE_ISO}")
-  if [ "$SIZE" -lt 100000000 ]; then
+  if [ "$SIZE" -lt 10000000 ]; then
     echo "ERROR: Wrong file Downloaded (size: $SIZE bytes)"
     rm -f "/tmp/${TINYCORE_ISO}"
     exit 1
@@ -274,7 +274,7 @@ if command -v isohybrid &>/dev/null; then
 fi
 
 cd "${SCRIPT_SOURCE_DIR}"
-rm -rf "$WORK_DIR"
+#rm -rf "$WORK_DIR"
 
 if [ -f "${ISO_NAME}" ]; then
   chown "$SUDO_USER:$(id -g "$SUDO_USER")" "${ISO_NAME}"
