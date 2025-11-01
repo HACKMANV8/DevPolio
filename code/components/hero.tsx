@@ -28,7 +28,7 @@ export function Hero() {
             animation: isLoaded ? "fade-in-up 0.6s ease-out 0.1s forwards" : "none",
           }}
         >
-          Open-Source Data Erasure
+          Data Erasure
         </div>
 
         {/* Title */}
@@ -61,23 +61,30 @@ export function Hero() {
             opacity: isLoaded ? 1 : 0,
           }}
         >
-          A cross-platform, open-source data wiping solution for Windows, Linux, and Android — ensuring NIST SP 800-88
+          A cross-platform data wiping solution for Windows, Linux, and Android ensuring NIST SP 800-88
           compliance and supporting India's circular economy.
         </p>
 
         {/* CTA Button */}
-        <div
+        <div className="flex flex-col sm:flex-row justify-center gap-4"
           style={{
             animation: isLoaded ? "fade-in-up 0.6s ease-out 0.5s forwards" : "none",
             opacity: isLoaded ? 1 : 0,
           }}
         >
           <a
-            href="#"
+            href="https://drive.google.com/uc?export=download&id=1tjpmqRFmL5yHBPS9IxegDvbm3RQBDBXs"
             className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-semibold rounded-lg hover:from-purple-500 hover:to-purple-600 transition-all duration-300 glow-pulse hover:shadow-2xl hover:shadow-purple-500/50"
           >
             <Download className="w-5 h-5" />
             Download ISO
+          </a>
+          <a
+            href="https://drive.google.com/uc?export=download&id=1mHMUd8OD9wMa-LwUIyE3s9FpevuHfC0s"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-semibold rounded-lg hover:from-purple-500 hover:to-purple-600 transition-all duration-300 glow-pulse hover:shadow-2xl hover:shadow-purple-500/50"
+          >
+            <Download className="w-5 h-5" />
+            Download Debian Package
           </a>
         </div>
       </div>
