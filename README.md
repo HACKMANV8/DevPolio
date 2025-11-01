@@ -1,4 +1,3 @@
-# DevPolio
 
 #  Void: Cross-Platform Secure Data Wiping Solution
 
