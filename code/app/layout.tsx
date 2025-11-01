@@ -8,7 +8,7 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "SecureEraseOS - Secure Data Erasure Solution",
+  title: "VOID - Cross-Platform Data Wiping Solution",
   description:
     "Cross-platform data wiping solution for Windows, Linux, and Android with NIST SP 800-88 compliance",
   generator: "v0.app",
