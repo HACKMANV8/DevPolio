@@ -31,22 +31,6 @@ It complies with **NIST SP 800-88** standards and generates **tamper-proof, veri
 
 ---
 
-##  System Requirements
-
-| Component | Minimum Requirement |
-
-|----------------|-----------------------------|
-
-| Architecture | 64-bit |
-
-| RAM | 1 GB (2 GB recommended) |
-
-| Storage | 1 GB free space |
-
-| Boot Mode | Legacy BIOS or UEFI |
-
----
-
 ##  Installation & Usage Guide
 
 ###  For Windows Users
